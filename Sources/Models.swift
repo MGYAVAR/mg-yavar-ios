@@ -5,12 +5,12 @@ struct PortfolioResponse: Codable {
     let positions: Positions?
 }
 struct Balances: Codable {
-    let data: [BalanceItem]?
-    enum CodingKeys: String, CodingKey { case data = "Data" }
-}
-struct BalanceItem: Codable {
     let totalValue: Double?
-    enum CodingKeys: String, CodingKey { case totalValue = "TotalValue" }
+    let cashAvailable: Double?
+    enum CodingKeys: String, CodingKey {
+        case totalValue = "TotalValue"
+        case cashAvailable = "CollateralAvailable"
+    }
 }
 struct Positions: Codable {
     let data: [Position]?
@@ -19,15 +19,23 @@ struct Positions: Codable {
 struct Position: Codable, Identifiable {
     var id: String = UUID().uuidString
     let display: Display?
+    let base: Base?
     let view: View?
     enum CodingKeys: String, CodingKey {
         case display = "DisplayAndFormat"
+        case base = "NetPositionBase"
         case view = "NetPositionView"
     }
-    struct Display: Codable { let symbol: String }
+    struct Display: Codable { let symbol: String? }
+    struct Base: Codable {
+        let amount: Double?
+        enum CodingKeys: String, CodingKey { case amount = "Amount" }
+    }
     struct View: Codable {
         let pnl: Double?
-        enum CodingKeys: String, CodingKey { case pnl = "UnrealizedMarketValueInBaseCurrency" }
+        enum CodingKeys: String, CodingKey {
+            case pnl = "ProfitLossOnTradeInBaseCurrency"
+        }
     }
 }
 struct SignalsResponse: Codable {
@@ -41,8 +49,8 @@ struct RadarItem: Codable, Identifiable {
     let score: Int?
     enum CodingKeys: String, CodingKey {
         case ticker
-        case recClass = "recommendation_class"
-        case score = "opportunity_score"
+        case recClass = "rec_class"
+        case score
     }
 }
 struct OrdersResponse: Codable {

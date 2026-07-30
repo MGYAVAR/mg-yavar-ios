@@ -29,7 +29,7 @@ struct PortfolioView: View {
         NavigationStack {
             List {
                 if loading { ProgressView() }
-                if !err.isEmpty { Text(err).foregroundColor(.red) }
+                if !err.isEmpty { Text(err).foregroundColor(.red).font(.caption) }
                 Section("Account") { Text("€\(totalValue, specifier: "%.0f")").bold() }
                 Section("Positions") {
                     ForEach(positions) { p in
@@ -49,9 +49,12 @@ struct PortfolioView: View {
         loading = true; err = ""
         do {
             let p: PortfolioResponse = try await APIClient.shared.fetch("/portfolio")
-            totalValue = p.balances?.data?.first?.totalValue ?? 0
+            totalValue = p.balances?.totalValue ?? 0
             positions = (p.positions?.data ?? []).filter { ($0.display?.symbol ?? "") != "" }
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            print("PORTFOLIO ERROR: \(error)")
+        }
         loading = false
     }
 }
@@ -66,7 +69,7 @@ struct SignalsView: View {
         NavigationStack {
             List {
                 if loading { ProgressView() }
-                if !err.isEmpty { Text(err).foregroundColor(.red) }
+                if !err.isEmpty { Text(err).foregroundColor(.red).font(.caption) }
                 ForEach(items) { r in
                     HStack {
                         Text(r.ticker).bold()
@@ -81,8 +84,12 @@ struct SignalsView: View {
     
     func load() async {
         loading = true; err = ""
-        do { items = (try await APIClient.shared.fetch("/signals") as SignalsResponse).topRadar ?? [] }
-        catch { err = error.localizedDescription }
+        do {
+            items = (try await APIClient.shared.fetch("/signals") as SignalsResponse).topRadar ?? []
+        } catch {
+            err = error.localizedDescription
+            print("SIGNALS ERROR: \(error)")
+        }
         loading = false
     }
 }
@@ -97,7 +104,7 @@ struct BracketsView: View {
         NavigationStack {
             List {
                 if loading { ProgressView() }
-                if !err.isEmpty { Text(err).foregroundColor(.red) }
+                if !err.isEmpty { Text(err).foregroundColor(.red).font(.caption) }
                 if items.isEmpty && !loading { Text("No open orders") }
                 ForEach(items) { o in
                     HStack {
@@ -112,8 +119,12 @@ struct BracketsView: View {
     
     func load() async {
         loading = true; err = ""
-        do { items = (try await APIClient.shared.fetch("/orders") as OrdersResponse).data ?? [] }
-        catch { err = error.localizedDescription }
+        do {
+            items = (try await APIClient.shared.fetch("/orders") as OrdersResponse).data ?? []
+        } catch {
+            err = error.localizedDescription
+            print("ORDERS ERROR: \(error)")
+        }
         loading = false
     }
 }
