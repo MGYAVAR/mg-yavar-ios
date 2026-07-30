@@ -18,9 +18,111 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Models
+
+struct PortfolioResponse: Decodable {
+    let balances: Balances?
+    let positionsList: [Position]
+    
+    enum CodingKeys: String, CodingKey {
+        case balances
+        case positions
+    }
+    
+    enum PositionsCodingKeys: String, CodingKey {
+        case data = "Data"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        balances = try container.decodeIfPresent(Balances.self, forKey: .balances)
+        // Custom decode for positions with __count + Data structure
+        if let positionsContainer = try? container.nestedContainer(keyedBy: PositionsCodingKeys.self, forKey: .positions) {
+            positionsList = try positionsContainer.decodeIfPresent([Position].self, forKey: .data) ?? []
+        } else {
+            positionsList = []
+        }
+    }
+}
+
+struct Balances: Decodable {
+    let totalValue: Double?
+    let cashAvailable: Double?
+    enum CodingKeys: String, CodingKey {
+        case totalValue = "TotalValue"
+        case cashAvailable = "CollateralAvailable"
+    }
+}
+
+struct Position: Decodable, Identifiable {
+    var id: String = UUID().uuidString
+    let symbol: String
+    let amount: Double
+    let pnl: Double
+    
+    enum CodingKeys: String, CodingKey {
+        case display = "DisplayAndFormat"
+        case base = "NetPositionBase"
+        case view = "NetPositionView"
+    }
+    
+    enum DisplayKeys: String, CodingKey { case symbol = "Symbol" }
+    enum BaseKeys: String, CodingKey { case amount = "Amount" }
+    enum ViewKeys: String, CodingKey { case pnl = "ProfitLossOnTradeInBaseCurrency" }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        let displayContainer = try container.nestedContainer(keyedBy: DisplayKeys.self, forKey: .display)
+        symbol = try displayContainer.decode(String.self, forKey: .symbol)
+        
+        let baseContainer = try container.nestedContainer(keyedBy: BaseKeys.self, forKey: .base)
+        amount = try baseContainer.decode(Double.self, forKey: .amount)
+        
+        let viewContainer = try container.nestedContainer(keyedBy: ViewKeys.self, forKey: .view)
+        pnl = try viewContainer.decodeIfPresent(Double.self, forKey: .pnl) ?? 0
+    }
+}
+
+struct SignalsResponse: Decodable {
+    let topRadar: [RadarItem]?
+    enum CodingKeys: String, CodingKey { case topRadar = "top_radar" }
+}
+
+struct RadarItem: Decodable, Identifiable {
+    var id: String = UUID().uuidString
+    let ticker: String
+    let recClass: String?
+    let score: Int?
+    enum CodingKeys: String, CodingKey {
+        case ticker
+        case recClass = "rec_class"
+        case score
+    }
+}
+
+struct OrdersResponse: Decodable {
+    let data: [Order]?
+    enum CodingKeys: String, CodingKey { case data = "Data" }
+}
+
+struct Order: Decodable, Identifiable {
+    var id: String = UUID().uuidString
+    let type: String?
+    let price: Double?
+    let qty: Double?
+    enum CodingKeys: String, CodingKey {
+        case type = "OpenOrderType"
+        case price = "Price"
+        case qty = "Amount"
+    }
+}
+
+struct HealthResponse: Decodable { let status: String }
+
 // MARK: - Portfolio
 struct PortfolioView: View {
-    @State private var positions: [Position] = []
+    @State private var items: [Position] = []
     @State private var totalValue: Double = 0
     @State private var loading = true
     @State private var err = ""
@@ -31,13 +133,12 @@ struct PortfolioView: View {
                 if loading { ProgressView() }
                 if !err.isEmpty { Text(err).foregroundColor(.red).font(.caption) }
                 Section("Account") { Text("€\(totalValue, specifier: "%.0f")").bold() }
-                Section("Positions") {
-                    ForEach(positions) { p in
+                Section("Positions (\(items.count))") {
+                    ForEach(items) { p in
                         HStack {
-                            Text(p.display?.symbol ?? "?").bold()
+                            Text(p.symbol).bold()
                             Spacer()
-                            let pnl = p.view?.pnl ?? 0
-                            Text("€\(pnl, specifier: "%.0f")").foregroundColor(pnl >= 0 ? .green : .red)
+                            Text("€\(p.pnl, specifier: "%.0f")").foregroundColor(p.pnl >= 0 ? .green : .red)
                         }
                     }
                 }
@@ -48,12 +149,12 @@ struct PortfolioView: View {
     func load() async {
         loading = true; err = ""
         do {
-            let p: PortfolioResponse = try await APIClient.shared.fetch("/portfolio")
-            totalValue = p.balances?.totalValue ?? 0
-            positions = (p.positions?.data ?? []).filter { ($0.display?.symbol ?? "") != "" }
+            let r: PortfolioResponse = try await APIClient.shared.fetch("/portfolio")
+            totalValue = r.balances?.totalValue ?? 0
+            items = r.positionsList
         } catch {
-            err = error.localizedDescription
-            print("PORTFOLIO ERROR: \(error)")
+            err = "\(error)"
+            print("PORTFOLIO: \(error)")
         }
         loading = false
     }
@@ -87,8 +188,8 @@ struct SignalsView: View {
         do {
             items = (try await APIClient.shared.fetch("/signals") as SignalsResponse).topRadar ?? []
         } catch {
-            err = error.localizedDescription
-            print("SIGNALS ERROR: \(error)")
+            err = "\(error)"
+            print("SIGNALS: \(error)")
         }
         loading = false
     }
@@ -122,8 +223,8 @@ struct BracketsView: View {
         do {
             items = (try await APIClient.shared.fetch("/orders") as OrdersResponse).data ?? []
         } catch {
-            err = error.localizedDescription
-            print("ORDERS ERROR: \(error)")
+            err = "\(error)"
+            print("ORDERS: \(error)")
         }
         loading = false
     }
@@ -135,7 +236,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("API") { Text("http://100.71.88.40:8788").font(.caption).foregroundColor(.secondary) }
-                Section("Connection") { Text("Backend connected ✓").foregroundColor(.green) }
+                Section("Connection") { Text("Backend ✓").foregroundColor(.green) }
             }.navigationTitle("Settings")
         }
     }

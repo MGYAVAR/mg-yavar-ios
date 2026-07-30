@@ -6,7 +6,9 @@ actor APIClient {
     
     func fetch<T: Decodable>(_ path: String) async throws -> T {
         guard let url = URL(string: base + path) else { throw URLError(.badURL) }
-        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+        var req = URLRequest(url: url, timeoutInterval: 10)
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder().decode(T.self, from: data)
     }
 }
